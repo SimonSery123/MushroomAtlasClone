@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<h2>Nálezy hub</h2>
+<div style="display: flex;">
+    <div style="width: 70%;">
+        <form id="filter-form">
+            <label for="mushroom-filter">Druh houby:</label>
+            <select id="mushroom-filter" name="mushroom">
+                <option value="">Všechny</option>
+                {% for mushroom in mushrooms %}
+                    <option value="{{ mushroom.id }}">{{ mushroom.name_cz }}</option>
+                {% endfor %}
+            </select>
+            <br>
+            <label for="time-filter">Aktuálnost:</label>
+            <select id="time-filter" name="time">
+                <option value="">Kdykoliv</option>
+                <option value="week">Max týden</option>
+                <option value="month">Max měsíc</option>
+                <option value="halfyear">Max půlrok</option>
+                <option value="year">Max rok</option>
+            </select>
+            <br>
+            <label for="edibility-filter">Jedlost:</label>
+            <select id="edibility-filter" name="edibility">
+                <option value="">Všechna</option>
+                <option value="jedla">Jedlá</option>
+                <option value="nejedla">Nejedlá</option>
+                <option value="jedovata">Jedovatá</option>
+            </select>
+        </form>
+        {% if user.is_authenticated %}
+            <a href="{% url 'add_finding' %}" class="btn btn-primary">Přidej nález</a>
+        {% endif %}
+        <div id="map"></div>
+    </div>
+    <div id="details" style="width: 30%; padding-left: 20px;">
+        <h3>Detaily nálezu</h3>
+        <div id="details-content">
+            Klikněte na marker na mapě pro zobrazení detailů.
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<script>
+        // Načtení URL ke statickým souborům
+    var edibleIconUrl = "{% static 'jedla.png' %}";
+    var notedibleIconUrl = "{% static 'nejedla.png' %}";
+    var poisonIconUrl = "{% static 'jedovata.png' %}";
+    var shadowIconUrl = "{% static 'stin.png' %}";
+
+    var map = L.map('map').setView([49.5, 15.5], 7); // Nastavení počátečního zobrazení
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data © <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+        // Definice ikon
+    var icons = {
+        'jedla': L.icon({
+            iconUrl: edibleIconUrl,
+            shadowUrl: shadowIconUrl,
+            iconSize: [39, 50],
+            shadowSize: [41, 29],
+            iconAnchor: [20, 50],
+            shadowAnchor: [0, 29],
+            popupAnchor: [-3, -76]
+        }),
+        'nejedla': L.icon({
+            iconUrl: notedibleIconUrl,
+            shadowUrl: shadowIconUrl,
+            iconSize: [39, 50],
+            shadowSize: [41, 29],
+            iconAnchor: [20, 50],
+            shadowAnchor: [0, 29],
+            popupAnchor: [-3, -76]
+        }),
+        'jedovata': L.icon({
+            iconUrl: poisonIconUrl,
+            shadowUrl: shadowIconUrl,
+            iconSize: [39, 50],
+            shadowSize: [41, 29],
+            iconAnchor: [20, 50],
+            shadowAnchor: [0, 29],
+            popupAnchor: [-3, -76]
+        })
+    };
+
+
+    var markers = [];
+    var selectedFindingId = "{{ selected_finding.id }}" || null;
+
+    // Funkce pro zobrazení detailů nálezu
+    function showDetails(finding) {
+        var detailsContent = `
+            <p><strong>Název:</strong> ${finding.mushroom.name_cz}<br>
+            <strong>Uživatel:</strong> ${finding.user.username}<br>
+            <strong>Popis:</strong> ${finding.description}<br>
+            <strong>Datum nálezu:</strong> ${finding.date_found}</p>
+        `;
+        if (finding.image) {
+            detailsContent += `<p><img src="${finding.image}" alt="obrázek nálezu" style="max-width: 100%; height: auto;"></p>`;
+        }
+        detailsContent += `<h4>Komentáře</h4>`;
+        if (finding.comments.length > 0) {
+            finding.comments.forEach(comment => {
+                detailsContent += `<p><strong>${comment.user}:</strong> ${comment.text} <br><em>${comment.created_at}</em></p>`;
+            });
+        } else {
+            detailsContent += `<p>Žádné komentáře.</p>`;
+        }
+        detailsContent += `<a href="/add_comment/${finding.id}/" class="btn btn-primary">Přidat komentář</a>`;
+        document.getElementById('details-content').innerHTML = detailsContent;
+    }
+
+    // Přidání markerů pro každý nález
+    {% for finding in findings %}
+    var iconType = "{% if finding.mushroom.edibility == 'jedla' %}jedla{% elif finding.mushroom.edibility == 'nejedla' %}nejedla{% else %}jedovata{% endif %}";
+    var dateFound = new Date("{{ finding.date_found|date:'Y-m-d' }}");
+    var marker = L.marker([{{ finding.latitude }}, {{ finding.longitude }}], {icon: icons[iconType]});
+    marker.mushroomId = "{{ finding.mushroom.id }}";
+    marker.edibility = "{{ finding.mushroom.edibility }}";
+    marker.dateFound = dateFound;
+    marker.findingId = "{{ finding.id }}";
+    marker.on('click', function() {
+        showDetails({
+            id: "{{ finding.id }}",
+            mushroom: { name_cz: "{{ finding.mushroom.name_cz }}" },
+            user: { username: "{{ finding.user.user.username }}" },
+            description: "{{ finding.description }}",
+            date_found: "{{ finding.date_found }}",
+            image: "{% if finding.image %}{{ finding.image.url }}{% endif %}",
+            comments: [
+                {% for comment in finding.comments.all %}
+                {
+                    user: "{{ comment.user.user.username }}",
+                    text: "{{ comment.text }}",
+                    created_at: "{{ comment.created_at }}"
+                }{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ]
+        });
+    });
+    markers.push(marker);
+    marker.addTo(map);
+    if (selectedFindingId && selectedFindingId == "{{ finding.id }}") {
+        map.setView(marker.getLatLng(), 13);
+        showDetails({
+            id: "{{ finding.id }}",
+            mushroom: { name_cz: "{{ finding.mushroom.name_cz }}" },
+            user: { username: "{{ finding.user.user.username }}" },
+            description: "{{ finding.description }}",
+            date_found: "{{ finding.date_found }}",
+            image: "{% if finding.image %}{{ finding.image.url }}{% endif %}",
+            comments: [
+                {% for comment in finding.comments.all %}
+                {
+                    user: "{{ comment.user.user.username }}",
+                    text: "{{ comment.text }}",
+                    created_at: "{{ comment.created_at }}"
+                }{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ]
+        });
+    }
+
+    {% endfor %}
+
+    // Funkce pro filtrování markerů
+    function filterMarkers() {
+        var selectedMushroomId = document.getElementById('mushroom-filter').value;
+        var selectedEdibility = document.getElementById('edibility-filter').value;
+        var selectedTime = document.getElementById('time-filter').value;
+        var now = new Date();
+        markers.forEach(marker => {
+            var timeCondition = true;
+            if (selectedTime === "week") {
+                var weekAgo = new Date(now);
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                timeCondition = marker.dateFound >= weekAgo;
+            } else if (selectedTime === "month") {
+                var monthAgo = new Date(now);
+                monthAgo.setMonth(monthAgo.getMonth() - 1);
+                timeCondition = marker.dateFound >= monthAgo;
+            } else if (selectedTime === "halfyear") {
+                var halfYearAgo = new Date(now);
+                halfYearAgo.setMonth(halfYearAgo.getMonth() - 6);
+                timeCondition = marker.dateFound >= halfYearAgo;
+            } else if (selectedTime === "year") {
+                var yearAgo = new Date(now);
+                yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+                timeCondition = marker.dateFound >= yearAgo;
+            }
+
+            if ((selectedMushroomId === "" || marker.mushroomId === selectedMushroomId) &&
+                (selectedEdibility === "" || marker.edibility === selectedEdibility) &&
+                timeCondition) {
+                marker.addTo(map);
+            } else {
+                map.removeLayer(marker);
+            }
+        });
+    }
+
+    // Přidání event listeneru pro změnu filtru
+    document.getElementById('mushroom-filter').addEventListener('change', filterMarkers);
+    document.getElementById('edibility-filter').addEventListener('change', filterMarkers);
+    document.getElementById('time-filter').addEventListener('change', filterMarkers);
+</script>
+{% endblock %}
+

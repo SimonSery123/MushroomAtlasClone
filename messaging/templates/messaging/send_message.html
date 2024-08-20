@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Poslat zprávu</h1>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div id="attachments">
+        {{ attachment_formset.management_form }}
+        {% for form in attachment_formset %}
+            <div class="attachment-form" data-form-index="{{ forloop.counter0 }}">
+                {{ form.as_p }}
+
+            </div>
+        {% endfor %}
+    </div>
+    <button type="submit">Odeslat</button>
+</form>
+{% endblock %}

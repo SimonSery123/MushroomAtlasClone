@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2><strong>{{ mushroom.name_cz }}</strong></h2>
+<p><strong> Popis:</strong>  {{ mushroom.description }}</p>
+<p><strong> Jedlost:</strong>  {{ mushroom.get_edibility_display }}</p>
+<p><strong> Místo výskytu:</strong>
+{% if mushroom.habitats.exists %}
+    {% for habitat in mushroom.habitats.all %}
+        {{ habitat.name }}{% if not forloop.last %}, {% endif %}
+    {% endfor %}
+{% else %}
+    <span>Nejsou k dispozici žádná data o místech výskytu.</span>
+{% endif %}
+</p>
+{% if mushroom.image %}
+<p><img src="{{ mushroom.image.url }}" alt="{{ mushroom.name_cz }}"></p>
+{% endif %}
+<p><strong> Řád:</strong>  <a href="{% url 'family_detail' mushroom.family.id %}">{{ mushroom.family.name }}</a></p>
+<p><strong>Recepty:</strong>
+<ul>
+    {% for recipe in mushroom.recipes.all %}
+        <li><a href="{% url 'recipe_detail' pk=recipe.pk %}">{{ recipe.title }}</a></li>
+    {% endfor %}
+</ul>
+{% endblock %}

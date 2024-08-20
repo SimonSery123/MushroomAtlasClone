@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ul>
+    {% for comment in comments %}
+        <li>
+            <a href="{% url 'mark_comment_read' comment.id %}">
+                {% if comment.new %}
+                    <mark><strong>{{ comment.user }} | {{ comment.finding.mushroom.name_cz }} | {{ comment.text }} | {{ comment.created_at }}</strong></mark>
+                {% else %}
+                    {{ comment.user }} | {{ comment.finding.mushroom.name_cz }} | {{ comment.text }} | {{ comment.created_at }}
+                {% endif %}
+            </a>
+        </li>
+    {% endfor %}
+</ul>
+{% endblock %}
